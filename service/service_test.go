@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coinbase/rosetta-sdk-go/parser"
 	rtypes "github.com/coinbase/rosetta-sdk-go/types"
 	"gitlab.com/NebulousLabs/Sia/crypto"
 	"gitlab.com/NebulousLabs/Sia/node"
@@ -148,8 +149,8 @@ func TestDataAPI(t *testing.T) {
 		t.Fatal(rerr)
 	}
 	balance := balanceResp.Balances[0].Value
-	utxos := balanceResp.Metadata["utxos"].([]balanceUTXO)
-	if balance != tenSC.String() || len(utxos) != 1 || utxos[0].Value != balance {
+	utxos := balanceResp.Coins
+	if balance != tenSC.String() || len(utxos) != 1 || utxos[0].Amount.Value != balance {
 		t.Fatal("expected 1 utxo worth 10 SC, got", balance, utxos)
 	}
 
@@ -220,7 +221,7 @@ func TestDataAPI(t *testing.T) {
 		t.Fatal(rerr)
 	}
 	balance = balanceResp.Balances[0].Value
-	utxos = balanceResp.Metadata["utxos"].([]balanceUTXO)
+	utxos = balanceResp.Coins
 	if balance != "0" || len(utxos) != 0 {
 		t.Fatal("expected 0 utxos, got", balance, utxos)
 	}
@@ -302,8 +303,8 @@ func TestConstructionAPI(t *testing.T) {
 		t.Fatal(rerr)
 	}
 	balance := balanceResp.Balances[0].Value
-	utxos := balanceResp.Metadata["utxos"].([]balanceUTXO)
-	if balance != tenSC.String() || len(utxos) != 1 || utxos[0].Value != balance {
+	utxos := balanceResp.Coins
+	if balance != tenSC.String() || len(utxos) != 1 || utxos[0].Amount.Value != balance {
 		t.Fatal("expected 1 utxo worth 10 SC, got", balance, utxos)
 	}
 
@@ -311,13 +312,13 @@ func TestConstructionAPI(t *testing.T) {
 	fiveSC := tenSC.Div64(2)
 	void := stypes.UnlockHash{1, 2, 3}
 	ops := []*rtypes.Operation{
-		transferOp(0, stypes.SiacoinOutput{UnlockHash: addr, Value: tenSC}, false),
-		transferOp(1, stypes.SiacoinOutput{UnlockHash: void, Value: fiveSC}, true),
-		transferOp(2, stypes.SiacoinOutput{UnlockHash: addr, Value: fiveSC}, true),
+		transferOp(0, stypes.SiacoinOutput{UnlockHash: addr, Value: tenSC}, stypes.SiacoinOutputID{}, false),
+		transferOp(1, stypes.SiacoinOutput{UnlockHash: void, Value: fiveSC}, stypes.SiacoinOutputID{}, true),
+		transferOp(2, stypes.SiacoinOutput{UnlockHash: addr, Value: fiveSC}, stypes.SiacoinOutputID{}, true),
 	}
+	ops[0].CoinChange.CoinIdentifier = utxos[0].CoinIdentifier
 	ops[0].Metadata = map[string]interface{}{
-		"parent_identifier": utxos[0].ID,
-		"public_key":        hex.EncodeToString(edpk),
+		"public_key": hex.EncodeToString(edpk),
 	}
 
 	// no-op
@@ -354,9 +355,8 @@ func TestConstructionAPI(t *testing.T) {
 	if rerr != nil {
 		t.Fatal(rerr)
 	}
-	parseResp.Operations[0].Metadata = ops[0].Metadata
-	if !reflect.DeepEqual(parseResp.Operations, ops) {
-		t.Fatal("parsed ops do not match intended ops")
+	if err := new(parser.Parser).ExpectedOperations(ops, parseResp.Operations, false, false); err != nil {
+		t.Fatal("parsed ops do not match intended ops:", err)
 	}
 	// sign
 	sig := &rtypes.Signature{
@@ -384,9 +384,8 @@ func TestConstructionAPI(t *testing.T) {
 	if rerr != nil {
 		t.Fatal(rerr)
 	}
-	parseResp.Operations[0].Metadata = ops[0].Metadata
-	if !reflect.DeepEqual(parseResp.Operations, ops) {
-		t.Fatal("parsed ops do not match intended ops")
+	if err := new(parser.Parser).ExpectedOperations(ops, parseResp.Operations, false, false); err != nil {
+		t.Fatal("parsed ops do not match intended ops:", err)
 	}
 	// hash
 	hashResp, rerr := rs.ConstructionHash(ctx, &rtypes.ConstructionHashRequest{
@@ -404,7 +403,7 @@ func TestConstructionAPI(t *testing.T) {
 	if rerr != nil {
 		t.Fatal(rerr)
 	}
-	if hashResp.TransactionHash != submitResp.TransactionIdentifier.Hash {
+	if hashResp.TransactionIdentifier.Hash != submitResp.TransactionIdentifier.Hash {
 		t.Fatal("hash mismatch")
 	}
 
@@ -430,6 +429,8 @@ func TestConstructionAPI(t *testing.T) {
 		Operations:            ops,
 	}
 	transactionResp.Transaction.Operations[0].Metadata = ops[0].Metadata
+	transactionResp.Transaction.Operations[1].CoinChange.CoinIdentifier.Identifier = stypes.SiacoinOutputID{}.String()
+	transactionResp.Transaction.Operations[2].CoinChange.CoinIdentifier.Identifier = stypes.SiacoinOutputID{}.String()
 	if !reflect.DeepEqual(transactionResp.Transaction, exp) {
 		t.Fatal("mempool transaction mismatch")
 	}
@@ -469,8 +470,8 @@ func TestConstructionAPI(t *testing.T) {
 		t.Fatal(rerr)
 	}
 	balance = balanceResp.Balances[0].Value
-	utxos = balanceResp.Metadata["utxos"].([]balanceUTXO)
-	if balance != fiveSC.String() || len(utxos) != 1 || utxos[0].Value != balance {
+	utxos = balanceResp.Coins
+	if balance != fiveSC.String() || len(utxos) != 1 || utxos[0].Amount.Value != balance {
 		t.Fatal("expected 1 utxo worth 5 SC, got", balance, utxos)
 	}
 	balanceResp, rerr = rs.AccountBalance(ctx, &rtypes.AccountBalanceRequest{
@@ -484,8 +485,8 @@ func TestConstructionAPI(t *testing.T) {
 		t.Fatal(rerr)
 	}
 	balance = balanceResp.Balances[0].Value
-	utxos = balanceResp.Metadata["utxos"].([]balanceUTXO)
-	if balance != fiveSC.String() || len(utxos) != 1 || utxos[0].Value != balance {
+	utxos = balanceResp.Coins
+	if balance != fiveSC.String() || len(utxos) != 1 || utxos[0].Amount.Value != balance {
 		t.Fatal("expected 1 utxo worth 5 SC, got", balance, utxos)
 	}
 }

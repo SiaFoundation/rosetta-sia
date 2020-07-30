@@ -39,7 +39,6 @@ func (rs *RosettaService) dbView(fn func(h *txnHelper)) error {
 func (rs *RosettaService) ProcessConsensusChange(cc modules.ConsensusChange) {
 	err := rs.dbUpdate(func(h *txnHelper) {
 		height := h.getCurrentHeight()
-
 		for i, b := range cc.RevertedBlocks {
 			for _, diff := range cc.RevertedDiffs[i].SiacoinOutputDiffs {
 				if diff.Direction == modules.DiffApply {

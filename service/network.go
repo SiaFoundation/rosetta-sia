@@ -11,13 +11,17 @@ import (
 
 func errorFn(code int32, retriable bool, msg string) func(error) *rtypes.Error {
 	return func(err error) *rtypes.Error {
+		var details map[string]interface{}
 		if err != nil {
-			msg += ": " + err.Error()
+			details = map[string]interface{}{
+				"context": err.Error(),
+			}
 		}
 		return &rtypes.Error{
 			Code:      code,
 			Message:   msg,
 			Retriable: retriable,
+			Details:   details,
 		}
 	}
 }
@@ -43,7 +47,8 @@ var networkAllow = &rtypes.Allow{
 		},
 	},
 	OperationTypes: []string{
-		"Transfer",
+		"Input",
+		"Output",
 	},
 	Errors: []*rtypes.Error{
 		errNotImplemented,

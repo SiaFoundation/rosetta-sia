@@ -47,35 +47,49 @@ func convertAmount(c stypes.Currency, positive bool) *rtypes.Amount {
 	}
 }
 
-func transferOp(index int, sco stypes.SiacoinOutput, credit bool) *rtypes.Operation {
+func transferOp(index int, sco stypes.SiacoinOutput, id stypes.SiacoinOutputID, credit bool) *rtypes.Operation {
+	action := rtypes.CoinSpent
+	if credit {
+		action = rtypes.CoinCreated
+	}
+	typ := "Input"
+	if credit {
+		typ = "Output"
+	}
 	return &rtypes.Operation{
 		OperationIdentifier: &rtypes.OperationIdentifier{
 			Index: int64(index),
 		},
-		Type:   "Transfer",
+		Type:   typ,
 		Status: "Applied",
 		Account: &rtypes.AccountIdentifier{
 			Address: sco.UnlockHash.String(),
+		},
+		CoinChange: &rtypes.CoinChange{
+			CoinIdentifier: &rtypes.CoinIdentifier{
+				Identifier: id.String(),
+			},
+			CoinAction: action,
 		},
 		Amount: convertAmount(sco.Value, credit),
 	}
 }
 
 type blockInfo struct {
-	Height            int64
-	TimelockedOutputs []stypes.SiacoinOutput // from miner payouts and file contracts
+	Height         int64
+	DelayedOutputs []modules.DelayedSiacoinOutputDiff // from miner payouts and file contracts
 }
 
 func parseBlock(b stypes.Block, height stypes.BlockHeight, diffs modules.ConsensusChangeDiffs) blockInfo {
-	var outputs []stypes.SiacoinOutput
+	var outputs []modules.DelayedSiacoinOutputDiff
 	for _, dscod := range diffs.DelayedSiacoinOutputDiffs {
 		if dscod.Direction == modules.DiffApply {
-			outputs = append(outputs, dscod.SiacoinOutput)
+			outputs = append(outputs, dscod)
 		}
 	}
 	return blockInfo{
-		Height:            int64(height),
-		TimelockedOutputs: outputs,
+		Height:         int64(height),
+		DelayedOutputs: outputs,
 	}
 }
 

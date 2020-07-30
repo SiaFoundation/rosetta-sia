@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strings"
 
 	rtypes "github.com/coinbase/rosetta-sdk-go/types"
@@ -13,7 +14,20 @@ import (
 	"gitlab.com/NebulousLabs/encoding"
 )
 
-func decodeTxn(b64 string) (txn stypes.Transaction, err error) {
+type constructionTxn struct {
+	stypes.Transaction
+	InputParents []stypes.SiacoinOutput
+}
+
+func (ct constructionTxn) MarshalSia(w io.Writer) error {
+	return encoding.NewEncoder(w).EncodeAll(ct.Transaction, ct.InputParents)
+}
+
+func (ct *constructionTxn) UnmarshalSia(r io.Reader) error {
+	return encoding.NewDecoder(r, encoding.DefaultAllocLimit).DecodeAll(&ct.Transaction, &ct.InputParents)
+}
+
+func decodeTxn(b64 string) (txn constructionTxn, err error) {
 	b, err := base64.StdEncoding.DecodeString(b64)
 	if err == nil {
 		err = encoding.Unmarshal(b, &txn)
@@ -61,13 +75,15 @@ func (rs *RosettaService) ConstructionDerive(ctx context.Context, request *rtype
 }
 
 // ConstructionHash implements the /construction/hash endpoint.
-func (rs *RosettaService) ConstructionHash(ctx context.Context, request *rtypes.ConstructionHashRequest) (*rtypes.ConstructionHashResponse, *rtypes.Error) {
+func (rs *RosettaService) ConstructionHash(ctx context.Context, request *rtypes.ConstructionHashRequest) (*rtypes.TransactionIdentifierResponse, *rtypes.Error) {
 	txn, err := decodeTxn(request.SignedTransaction)
 	if err != nil {
 		return nil, errInvalidTxn(err)
 	}
-	return &rtypes.ConstructionHashResponse{
-		TransactionHash: txn.ID().String(),
+	return &rtypes.TransactionIdentifierResponse{
+		TransactionIdentifier: &rtypes.TransactionIdentifier{
+			Hash: txn.ID().String(),
+		},
 	}, nil
 }
 
@@ -84,13 +100,12 @@ func (rs *RosettaService) ConstructionParse(ctx context.Context, request *rtypes
 	}
 
 	var ops []*rtypes.Operation
-	err = rs.dbView(func(h *txnHelper) {
-		ops = convertTransaction(h, txn).Operations
-	})
-	if err != nil {
-		return nil, errDatabase(err)
+	for i, sci := range txn.SiacoinInputs {
+		ops = append(ops, transferOp(len(ops), txn.InputParents[i], sci.ParentID, false))
 	}
-
+	for i, sco := range txn.SiacoinOutputs {
+		ops = append(ops, transferOp(len(ops), sco, txn.SiacoinOutputID(uint64(i)), true))
+	}
 	var signers []string
 	for _, sig := range txn.TransactionSignatures {
 		for _, in := range txn.SiacoinInputs {
@@ -108,19 +123,17 @@ func (rs *RosettaService) ConstructionParse(ctx context.Context, request *rtypes
 }
 
 // ConstructionPayloads implements the /construction/payloads endpoint. The
-// request must include two extra metadata fields for each "input" operation:
+// request must include an extra metadata field for each "input" operation:
 //
-//   parent_identifier    (the SiacoinOutputID of the input)
-//   public_key           (the ed25519 pubkey of the operation's address)
+//   public_key        (hex-encoded ed25519 pubkey of the operation's address)
 //
-// Both fields should be provided as hex-encoded strings.
 func (rs *RosettaService) ConstructionPayloads(ctx context.Context, request *rtypes.ConstructionPayloadsRequest) (*rtypes.ConstructionPayloadsResponse, *rtypes.Error) {
-	var txn stypes.Transaction
+	var txn constructionTxn
 	var payloads []*rtypes.SigningPayload
 	for _, op := range request.Operations {
 		if strings.HasPrefix(op.Amount.Value, "-") {
 			var parentID stypes.SiacoinOutputID
-			hex.Decode(parentID[:], []byte(op.Metadata["parent_identifier"].(string)))
+			(*crypto.Hash)(&parentID).LoadString(op.CoinChange.CoinIdentifier.Identifier)
 			key, _ := hex.DecodeString(op.Metadata["public_key"].(string))
 			uc := stypes.UnlockConditions{
 				PublicKeys: []stypes.SiaPublicKey{{
@@ -137,7 +150,7 @@ func (rs *RosettaService) ConstructionPayloads(ctx context.Context, request *rty
 			})
 			txn.TransactionSignatures = append(txn.TransactionSignatures, stypes.TransactionSignature{
 				ParentID:       crypto.Hash(parentID),
-				PublicKeyIndex: 0,
+				PublicKeyIndex: 0, // TODO: this assumes standard UnlockConditions
 				Timelock:       0,
 				CoveredFields:  stypes.FullCoveredFields,
 			})
@@ -146,6 +159,11 @@ func (rs *RosettaService) ConstructionPayloads(ctx context.Context, request *rty
 				Bytes:         nil, // to be supplied later
 				SignatureType: rtypes.Ed25519,
 			})
+			// add InputParent metadata
+			var parent stypes.SiacoinOutput
+			parent.UnlockHash.LoadString(op.Account.Address)
+			fmt.Sscan(op.Amount.Value[1:], &parent.Value)
+			txn.InputParents = append(txn.InputParents, parent)
 		} else {
 			// add output
 			var addr stypes.UnlockHash
@@ -176,14 +194,14 @@ func (rs *RosettaService) ConstructionPreprocess(ctx context.Context, request *r
 }
 
 // ConstructionSubmit implements the /construction/submit endpoint.
-func (rs *RosettaService) ConstructionSubmit(ctx context.Context, request *rtypes.ConstructionSubmitRequest) (*rtypes.ConstructionSubmitResponse, *rtypes.Error) {
+func (rs *RosettaService) ConstructionSubmit(ctx context.Context, request *rtypes.ConstructionSubmitRequest) (*rtypes.TransactionIdentifierResponse, *rtypes.Error) {
 	txn, err := decodeTxn(request.SignedTransaction)
 	if err != nil {
 		return nil, errInvalidTxn(err)
-	} else if err := rs.tp.AcceptTransactionSet([]stypes.Transaction{txn}); err != nil {
+	} else if err := rs.tp.AcceptTransactionSet([]stypes.Transaction{txn.Transaction}); err != nil {
 		return nil, errTxnNotAccepted(err)
 	}
-	return &rtypes.ConstructionSubmitResponse{
+	return &rtypes.TransactionIdentifierResponse{
 		TransactionIdentifier: &rtypes.TransactionIdentifier{
 			Hash: txn.ID().String(),
 		},

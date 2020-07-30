@@ -19,10 +19,10 @@ func getInput(h *txnHelper, sci stypes.SiacoinInput) stypes.SiacoinOutput {
 func convertTransaction(h *txnHelper, txn stypes.Transaction) *rtypes.Transaction {
 	var ops []*rtypes.Operation
 	for _, sci := range txn.SiacoinInputs {
-		ops = append(ops, transferOp(len(ops), getInput(h, sci), false))
+		ops = append(ops, transferOp(len(ops), getInput(h, sci), sci.ParentID, false))
 	}
-	for _, sco := range txn.SiacoinOutputs {
-		ops = append(ops, transferOp(len(ops), sco, true))
+	for i, sco := range txn.SiacoinOutputs {
+		ops = append(ops, transferOp(len(ops), sco, txn.SiacoinOutputID(uint64(i)), true))
 	}
 	return &rtypes.Transaction{
 		TransactionIdentifier: &rtypes.TransactionIdentifier{
@@ -54,8 +54,8 @@ func (rs *RosettaService) convertBlock(b stypes.Block) (*rtypes.Block, *rtypes.E
 	// NOTE: every block has at least one miner payout, so this slice is
 	// guaranteed to be non-empty
 	var blockOps []*rtypes.Operation
-	for _, mo := range info.TimelockedOutputs {
-		op := transferOp(len(blockOps), mo, true)
+	for _, do := range info.DelayedOutputs {
+		op := transferOp(len(blockOps), do.SiacoinOutput, do.ID, true)
 		op.Metadata = map[string]interface{}{
 			"timelock": info.Height + int64(stypes.MaturityDelay),
 		}

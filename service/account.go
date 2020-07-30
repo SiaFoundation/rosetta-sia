@@ -13,9 +13,9 @@ type balanceUTXO struct {
 	Timelock stypes.BlockHeight `json:"timelock"`
 }
 
-func (rs *RosettaService) balance(addr stypes.UnlockHash) (*rtypes.Amount, []balanceUTXO, *rtypes.BlockIdentifier, *rtypes.Error) {
+func (rs *RosettaService) balance(addr stypes.UnlockHash) (*rtypes.Amount, []*rtypes.Coin, *rtypes.BlockIdentifier, *rtypes.Error) {
 	var balance stypes.Currency
-	var utxos []balanceUTXO
+	var utxos []*rtypes.Coin
 	var height stypes.BlockHeight
 	var bid stypes.BlockID
 	err := rs.dbView(func(h *txnHelper) {
@@ -28,10 +28,12 @@ func (rs *RosettaService) balance(addr stypes.UnlockHash) (*rtypes.Amount, []bal
 		for _, id := range ids {
 			utxo := h.getUTXO(id)
 			balance = balance.Add(utxo.Value)
-			utxos = append(utxos, balanceUTXO{
-				ID:       id.String(),
-				Value:    utxo.Value.String(),
-				Timelock: utxo.Timelock,
+			utxos = append(utxos, &rtypes.Coin{
+				CoinIdentifier: &rtypes.CoinIdentifier{
+					Identifier: id.String(),
+				},
+				Amount: convertAmount(utxo.Value, true),
+				// TODO: include timelock somewhere
 			})
 		}
 		height = h.getCurrentHeight()
@@ -53,7 +55,7 @@ func (rs *RosettaService) AccountBalance(ctx context.Context, request *rtypes.Ac
 		return nil, errInvalidAddress(err)
 	}
 
-	balance, utxos, bi, err := rs.balance(uh)
+	balance, coins, bi, err := rs.balance(uh)
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +63,6 @@ func (rs *RosettaService) AccountBalance(ctx context.Context, request *rtypes.Ac
 	return &rtypes.AccountBalanceResponse{
 		BlockIdentifier: bi,
 		Balances:        []*rtypes.Amount{balance},
-		Metadata: map[string]interface{}{
-			"utxos": utxos,
-		},
+		Coins:           coins,
 	}, nil
 }
