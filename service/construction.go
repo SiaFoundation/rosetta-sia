@@ -133,8 +133,14 @@ func (rs *RosettaService) ConstructionPayloads(ctx context.Context, request *rty
 	for _, op := range request.Operations {
 		if strings.HasPrefix(op.Amount.Value, "-") {
 			var parentID stypes.SiacoinOutputID
-			(*crypto.Hash)(&parentID).LoadString(op.CoinChange.CoinIdentifier.Identifier)
-			key, _ := hex.DecodeString(op.Metadata["public_key"].(string))
+			err := (*crypto.Hash)(&parentID).LoadString(op.CoinChange.CoinIdentifier.Identifier)
+			if err != nil {
+				return nil, errInvalidUnlockConditions(err)
+			}
+			key, err := hex.DecodeString(op.Metadata["public_key"].(string))
+			if err != nil {
+				return nil, errInvalidUnlockConditions(err)
+			}
 			uc := stypes.UnlockConditions{
 				PublicKeys: []stypes.SiaPublicKey{{
 					Algorithm: stypes.SignatureEd25519,
@@ -161,15 +167,27 @@ func (rs *RosettaService) ConstructionPayloads(ctx context.Context, request *rty
 			})
 			// add InputParent metadata
 			var parent stypes.SiacoinOutput
-			parent.UnlockHash.LoadString(op.Account.Address)
-			fmt.Sscan(op.Amount.Value[1:], &parent.Value)
+			err = parent.UnlockHash.LoadString(op.Account.Address)
+			if err != nil {
+				return nil, errInvalidAddress(err)
+			}
+			_, err = fmt.Sscan(op.Amount.Value[1:], &parent.Value)
+			if err != nil {
+				return nil, errInvalidAmount(err)
+			}
 			txn.InputParents = append(txn.InputParents, parent)
 		} else {
 			// add output
 			var addr stypes.UnlockHash
-			addr.LoadString(op.Account.Address)
+			err := addr.LoadString(op.Account.Address)
+			if err != nil {
+				return nil, errInvalidAddress(err)
+			}
 			var value stypes.Currency
-			fmt.Sscan(op.Amount.Value, &value)
+			_, err = fmt.Sscan(op.Amount.Value, &value)
+			if err != nil {
+				return nil, errInvalidAmount(err)
+			}
 			txn.SiacoinOutputs = append(txn.SiacoinOutputs, stypes.SiacoinOutput{
 				UnlockHash: addr,
 				Value:      value,

@@ -129,12 +129,12 @@ func New(ni *rtypes.NetworkIdentifier, g modules.Gateway, cs modules.ConsensusSe
 		ccid = h.getConsensusChangeID()
 	})
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	go gcLoop(db)
 	if err := cs.ConsensusSetSubscribe(rs, ccid, nil); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 

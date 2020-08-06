@@ -280,7 +280,9 @@ func TestConstructionAPI(t *testing.T) {
 		t.Fatal(rerr)
 	}
 	var addr stypes.UnlockHash
-	addr.LoadString(deriveResp.Address)
+	if err := addr.LoadString(deriveResp.Address); err != nil {
+		t.Fatal(err)
+	}
 
 	// send 10 SC to the address
 	tenSC := stypes.SiacoinPrecision.Mul64(10)

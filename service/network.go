@@ -27,16 +27,18 @@ func errorFn(code int32, retriable bool, msg string) func(error) *rtypes.Error {
 }
 
 var (
-	errNotImplemented   = errorFn(0, false, "not implemented")(nil)
-	errDatabase         = errorFn(1, false, "database error")
-	errInvalidAddress   = errorFn(2, false, "invalid address")
-	errInvalidBlockID   = errorFn(3, false, "invalid block ID")
-	errInvalidTxnID     = errorFn(4, false, "invalid transaction ID")
-	errInvalidTxn       = errorFn(5, false, "invalid transaction")
-	errUnsupportedCurve = errorFn(6, false, "unsupported curve")(nil)
-	errUnknownBlock     = errorFn(7, true, "unknown block")(nil)
-	errUnknownTxn       = errorFn(8, true, "unknown transaction")(nil)
-	errTxnNotAccepted   = errorFn(9, true, "transaction not accepted")
+	errNotImplemented          = errorFn(0, false, "not implemented")(nil)
+	errDatabase                = errorFn(100, false, "database error")
+	errInvalidAmount           = errorFn(200, false, "invalid amount")
+	errInvalidAddress          = errorFn(201, false, "invalid address")
+	errInvalidUnlockConditions = errorFn(202, false, "invalid unlock conditions")
+	errInvalidBlockID          = errorFn(203, false, "invalid block ID")
+	errInvalidTxnID            = errorFn(204, false, "invalid transaction ID")
+	errInvalidTxn              = errorFn(205, false, "invalid transaction")
+	errUnsupportedCurve        = errorFn(300, false, "unsupported curve")(nil)
+	errUnknownBlock            = errorFn(400, true, "unknown block")(nil)
+	errUnknownTxn              = errorFn(401, true, "unknown transaction")(nil)
+	errTxnNotAccepted          = errorFn(500, true, "transaction not accepted")
 )
 
 var networkAllow = &rtypes.Allow{
@@ -53,7 +55,9 @@ var networkAllow = &rtypes.Allow{
 	Errors: []*rtypes.Error{
 		errNotImplemented,
 		errDatabase(nil),
+		errInvalidAmount(nil),
 		errInvalidAddress(nil),
+		errInvalidUnlockConditions(nil),
 		errInvalidBlockID(nil),
 		errInvalidTxnID(nil),
 		errInvalidTxn(nil),
