@@ -98,6 +98,12 @@ func (rs *RosettaService) ProcessConsensusChange(cc modules.ConsensusChange) {
 	}
 }
 
+// Close shuts down the service.
+func (rs *RosettaService) Close() error {
+	rs.cs.Unsubscribe(rs)
+	return rs.db.Close()
+}
+
 // New constructs a RosettaService from the provided modules, storing its
 // database within dir.
 func New(ni *rtypes.NetworkIdentifier, g modules.Gateway, cs modules.ConsensusSet, tp modules.TransactionPool, dir string) (*RosettaService, error) {

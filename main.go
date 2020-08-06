@@ -1,10 +1,16 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"path/filepath"
+	"strings"
 
 	"github.com/coinbase/rosetta-sdk-go/asserter"
 	"github.com/coinbase/rosetta-sdk-go/server"
@@ -25,7 +31,7 @@ func main() {
 		Blockchain: "Sia",
 		Network:    "Mainnet",
 	}
-	rs, err := startNode(n, *dir, *rpcAddr)
+	rs, shutdown, err := startNode(n, *dir, *rpcAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -42,25 +48,70 @@ func main() {
 		server.NewAccountAPIController(rs, a),
 		server.NewConstructionAPIController(rs, a),
 	)
+	srv := &http.Server{
+		Addr:    *serverAddr,
+		Handler: router,
+	}
+
+	// install signal handler
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt)
+		<-sigChan
+		fmt.Println("\rReceived interrupt, shutting down...")
+		srv.Shutdown(context.Background())
+	}()
+
 	log.Println("Listening on port", *serverAddr)
-	log.Fatal(http.ListenAndServe(*serverAddr, router))
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		log.Println("ListenAndServe:", err)
+	}
+	if err := shutdown(); err != nil {
+		log.Println("WARN: error shutting down modules:", err)
+	}
+	if err := rs.Close(); err != nil {
+		log.Println("WARN: error shutting down service:", err)
+	}
 }
 
-func startNode(network *rtypes.NetworkIdentifier, dir string, rpcAddr string) (*service.RosettaService, error) {
+func startNode(network *rtypes.NetworkIdentifier, dir string, rpcAddr string) (*service.RosettaService, func() error, error) {
 	g, err := gateway.New(rpcAddr, true, filepath.Join(dir, "gateway"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cs, errChan := consensus.New(g, true, filepath.Join(dir, "consensus"))
 	err = handleAsyncErr(errChan)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	tp, err := transactionpool.New(cs, g, filepath.Join(dir, "tpool"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return service.New(network, g, cs, tp, filepath.Join(dir, "db"))
+
+	rs, err := service.New(network, g, cs, tp, filepath.Join(dir, "db"))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	shutdown := func() error {
+		var errs []string
+		if err := tp.Close(); err != nil {
+			errs = append(errs, fmt.Sprintf("transaction pool: %v", err))
+		}
+		if err := cs.Close(); err != nil {
+			errs = append(errs, fmt.Sprintf("consensus set: %v", err))
+		}
+		if err := g.Close(); err != nil {
+			errs = append(errs, fmt.Sprintf("gateway: %v", err))
+		}
+		if len(errs) > 0 {
+			return errors.New(strings.Join(errs, "; "))
+		}
+		return nil
+	}
+
+	return rs, shutdown, nil
 }
 
 func handleAsyncErr(errCh <-chan error) error {
