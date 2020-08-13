@@ -48,9 +48,10 @@ func main() {
 		server.NewAccountAPIController(rs, a),
 		server.NewConstructionAPIController(rs, a),
 	)
+	loggedRouter := server.LoggerMiddleware(router)
 	srv := &http.Server{
 		Addr:    *serverAddr,
-		Handler: router,
+		Handler: loggedRouter,
 	}
 
 	// install signal handler

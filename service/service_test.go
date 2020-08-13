@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"io/ioutil"
+	"log"
 	"reflect"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 )
 
 func TestDataAPI(t *testing.T) {
+	log.SetOutput(ioutil.Discard)
 	testDir, err := ioutil.TempDir("", "rosetta-sia")
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +43,7 @@ func TestDataAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rs.Close()
 
 	// check network info
 	ctx := context.Background()
@@ -228,6 +231,7 @@ func TestDataAPI(t *testing.T) {
 }
 
 func TestConstructionAPI(t *testing.T) {
+	log.SetOutput(ioutil.Discard)
 	testDir, err := ioutil.TempDir("", "rosetta-sia")
 	if err != nil {
 		t.Fatal(err)
@@ -262,6 +266,7 @@ func TestConstructionAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rs.Close()
 
 	// generate keypair
 	keypair, err := keys.GenerateKeypair(rtypes.Edwards25519)

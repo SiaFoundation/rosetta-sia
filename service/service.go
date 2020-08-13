@@ -92,6 +92,12 @@ func (rs *RosettaService) ProcessConsensusChange(cc modules.ConsensusChange) {
 		h.putCurrentHeight(height)
 		h.putCurrentBlockID(cc.AppliedBlocks[len(cc.AppliedBlocks)-1].ID())
 		h.putConsensusChangeID(cc.ID)
+
+		if cc.Synced {
+			log.Printf("Synced at height %v (block %v)", height, cc.AppliedBlocks[len(cc.AppliedBlocks)-1].ID())
+		} else if height%1000 == 0 {
+			log.Printf("Still syncing (current height: %v)", height)
+		}
 	})
 	if err != nil {
 		log.Fatalln("Failed to update database:", err)
