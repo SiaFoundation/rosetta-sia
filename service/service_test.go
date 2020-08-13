@@ -2,13 +2,13 @@ package service
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/hex"
 	"io/ioutil"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/coinbase/rosetta-sdk-go/keys"
 	"github.com/coinbase/rosetta-sdk-go/parser"
 	rtypes "github.com/coinbase/rosetta-sdk-go/types"
 	"gitlab.com/NebulousLabs/Sia/crypto"
@@ -264,17 +264,16 @@ func TestConstructionAPI(t *testing.T) {
 	}
 
 	// generate keypair
-	edpk, edsk, _ := ed25519.GenerateKey(nil)
-	pubkey := &rtypes.PublicKey{
-		CurveType: rtypes.Edwards25519,
-		Bytes:     edpk,
+	keypair, err := keys.GenerateKeypair(rtypes.Edwards25519)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// derive an address
 	ctx := context.Background()
 	deriveResp, rerr := rs.ConstructionDerive(ctx, &rtypes.ConstructionDeriveRequest{
 		NetworkIdentifier: ni,
-		PublicKey:         pubkey,
+		PublicKey:         keypair.PublicKey,
 	})
 	if rerr != nil {
 		t.Fatal(rerr)
@@ -320,7 +319,7 @@ func TestConstructionAPI(t *testing.T) {
 	}
 	ops[0].CoinChange.CoinIdentifier = utxos[0].CoinIdentifier
 	ops[0].Metadata = map[string]interface{}{
-		"public_key": hex.EncodeToString(edpk),
+		"public_key": hex.EncodeToString(keypair.PublicKey.Bytes),
 	}
 
 	// no-op
@@ -361,13 +360,13 @@ func TestConstructionAPI(t *testing.T) {
 		t.Fatal("parsed ops do not match intended ops:", err)
 	}
 	// sign
-	sig := &rtypes.Signature{
-		SigningPayload: payloadsResp.Payloads[0],
-		PublicKey:      pubkey,
-		SignatureType:  rtypes.Ed25519,
-		Bytes:          ed25519.Sign(edsk, payloadsResp.Payloads[0].Bytes),
+	signer := keys.SignerEdwards25519{
+		KeyPair: keypair,
 	}
-
+	sig, err := signer.Sign(payloadsResp.Payloads[0], rtypes.Ed25519)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// add signatures
 	combineResp, rerr := rs.ConstructionCombine(ctx, &rtypes.ConstructionCombineRequest{
 		NetworkIdentifier:   ni,
