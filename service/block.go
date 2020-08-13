@@ -53,9 +53,18 @@ func (rs *RosettaService) convertBlock(b stypes.Block) (*rtypes.Block, *rtypes.E
 	//
 	// NOTE: every block has at least one miner payout, so this slice is
 	// guaranteed to be non-empty
+	minerPayouts := make(map[stypes.SiacoinOutputID]struct{}, len(b.MinerPayouts))
+	for i := range b.MinerPayouts {
+		minerPayouts[b.MinerPayoutID(uint64(i))] = struct{}{}
+	}
 	var blockOps []*rtypes.Operation
 	for _, do := range info.DelayedOutputs {
 		op := transferOp(len(blockOps), do.SiacoinOutput, do.ID, true)
+		if _, ok := minerPayouts[do.ID]; ok {
+			op.Type = opTypeBlock
+		} else {
+			op.Type = opTypeContract
+		}
 		op.Metadata = map[string]interface{}{
 			"timelock": info.Height + int64(stypes.MaturityDelay),
 		}

@@ -49,12 +49,10 @@ func convertAmount(c stypes.Currency, positive bool) *rtypes.Amount {
 
 func transferOp(index int, sco stypes.SiacoinOutput, id stypes.SiacoinOutputID, credit bool) *rtypes.Operation {
 	action := rtypes.CoinSpent
+	typ := opTypeInput
 	if credit {
 		action = rtypes.CoinCreated
-	}
-	typ := "Input"
-	if credit {
-		typ = "Output"
+		typ = opTypeOutput
 	}
 	return &rtypes.Operation{
 		OperationIdentifier: &rtypes.OperationIdentifier{

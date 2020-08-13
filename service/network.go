@@ -41,6 +41,13 @@ var (
 	errTxnNotAccepted          = errorFn(500, true, "transaction not accepted")
 )
 
+const (
+	opTypeInput    = "Input"
+	opTypeOutput   = "Output"
+	opTypeBlock    = "Block Reward"
+	opTypeContract = "File Contract Resolution"
+)
+
 var networkAllow = &rtypes.Allow{
 	OperationStatuses: []*rtypes.OperationStatus{
 		{
@@ -49,8 +56,10 @@ var networkAllow = &rtypes.Allow{
 		},
 	},
 	OperationTypes: []string{
-		"Input",
-		"Output",
+		opTypeInput,
+		opTypeOutput,
+		opTypeBlock,
+		opTypeContract,
 	},
 	Errors: []*rtypes.Error{
 		errNotImplemented,
