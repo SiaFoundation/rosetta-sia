@@ -1,11 +1,8 @@
 # Build rosetta-sia binary
 FROM golang:1.14 as builder
-COPY . rosetta-sia/
-RUN cd rosetta-sia && go build -o /app/rosetta-sia
-# TODO: once repo is public, change to:
-# RUN git clone https://github.com/NebulousLabs/rosetta-sia \
-#   && cd rosetta-sia \
-#   && go build -o /app/sia
+RUN git clone --depth 1 --branch v0.1.0 https://github.com/NebulousLabs/rosetta-sia \
+  && cd rosetta-sia \
+  && go build -o /app/rosetta-sia
 
 ## Build Final Image
 FROM ubuntu:18.04
