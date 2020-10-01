@@ -91,9 +91,14 @@ func (rs *RosettaService) NetworkList(ctx context.Context, request *rtypes.Metad
 
 // NetworkStatus implements the /network/status endpoint.
 func (rs *RosettaService) NetworkStatus(ctx context.Context, request *rtypes.NetworkRequest) (*rtypes.NetworkStatusResponse, *rtypes.Error) {
-	b, err := rs.convertBlock(rs.cs.CurrentBlock())
+	var bid stypes.BlockID
+	err := rs.dbView(func(h *txnHelper) { bid = h.getCurrentBlockID() })
 	if err != nil {
-		return nil, err
+		return nil, errDatabase(err)
+	}
+	b, height, exists := rs.cs.BlockByID(bid)
+	if !exists {
+		return nil, errUnknownBlock
 	}
 	var peers []*rtypes.Peer
 	for _, p := range rs.g.Peers() {
@@ -102,8 +107,11 @@ func (rs *RosettaService) NetworkStatus(ctx context.Context, request *rtypes.Net
 		})
 	}
 	return &rtypes.NetworkStatusResponse{
-		CurrentBlockIdentifier: b.BlockIdentifier,
-		CurrentBlockTimestamp:  b.Timestamp,
+		CurrentBlockIdentifier: &rtypes.BlockIdentifier{
+			Index: int64(height),
+			Hash:  bid.String(),
+		},
+		CurrentBlockTimestamp:  int64(b.Timestamp) * 1000,
 		GenesisBlockIdentifier: genesisIdentifier,
 		Peers:                  peers,
 	}, nil
