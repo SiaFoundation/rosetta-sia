@@ -63,14 +63,16 @@ func (rs *RosettaService) ConstructionDerive(ctx context.Context, request *rtype
 		return nil, errUnsupportedCurve
 	}
 	return &rtypes.ConstructionDeriveResponse{
-		Address: stypes.UnlockConditions{
-			PublicKeys: []stypes.SiaPublicKey{{
-				Algorithm: stypes.SignatureEd25519,
-				Key:       request.PublicKey.Bytes,
-			}},
-			SignaturesRequired: 1,
-			Timelock:           0,
-		}.UnlockHash().String(),
+		AccountIdentifier: &rtypes.AccountIdentifier{
+			Address: stypes.UnlockConditions{
+				PublicKeys: []stypes.SiaPublicKey{{
+					Algorithm: stypes.SignatureEd25519,
+					Key:       request.PublicKey.Bytes,
+				}},
+				SignaturesRequired: 1,
+				Timelock:           0,
+			}.UnlockHash().String(),
+		},
 	}, nil
 }
 
@@ -106,19 +108,21 @@ func (rs *RosettaService) ConstructionParse(ctx context.Context, request *rtypes
 	for i, sco := range txn.SiacoinOutputs {
 		ops = append(ops, transferOp(len(ops), sco, txn.SiacoinOutputID(uint64(i)), true))
 	}
-	var signers []string
+	var signers []*rtypes.AccountIdentifier
 	for _, sig := range txn.TransactionSignatures {
 		for _, in := range txn.SiacoinInputs {
 			if in.ParentID == stypes.SiacoinOutputID(sig.ParentID) {
-				signers = append(signers, hex.EncodeToString(in.UnlockConditions.PublicKeys[sig.PublicKeyIndex].Key))
+				signers = append(signers, &rtypes.AccountIdentifier{
+					Address: in.UnlockConditions.UnlockHash().String(),
+				})
 				break
 			}
 		}
 	}
 
 	return &rtypes.ConstructionParseResponse{
-		Operations: ops,
-		Signers:    signers,
+		Operations:               ops,
+		AccountIdentifierSigners: signers,
 	}, nil
 }
 
@@ -161,9 +165,9 @@ func (rs *RosettaService) ConstructionPayloads(ctx context.Context, request *rty
 				CoveredFields:  stypes.FullCoveredFields,
 			})
 			payloads = append(payloads, &rtypes.SigningPayload{
-				Address:       op.Account.Address,
-				Bytes:         nil, // to be supplied later
-				SignatureType: rtypes.Ed25519,
+				AccountIdentifier: op.Account,
+				Bytes:             nil, // to be supplied later
+				SignatureType:     rtypes.Ed25519,
 			})
 			// add InputParent metadata
 			var parent stypes.SiacoinOutput

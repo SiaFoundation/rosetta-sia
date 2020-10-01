@@ -284,7 +284,7 @@ func TestConstructionAPI(t *testing.T) {
 		t.Fatal(rerr)
 	}
 	var addr stypes.UnlockHash
-	if err := addr.LoadString(deriveResp.Address); err != nil {
+	if err := addr.LoadString(deriveResp.AccountIdentifier.Address); err != nil {
 		t.Fatal(err)
 	}
 
