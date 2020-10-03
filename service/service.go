@@ -7,6 +7,7 @@ import (
 	rtypes "github.com/coinbase/rosetta-sdk-go/types"
 	"github.com/dgraph-io/badger"
 	"gitlab.com/NebulousLabs/Sia/modules"
+	"gitlab.com/NebulousLabs/Sia/types"
 	stypes "gitlab.com/NebulousLabs/Sia/types"
 )
 
@@ -57,8 +58,8 @@ func (rs *RosettaService) ProcessConsensusChange(cc modules.ConsensusChange) {
 				}
 			}
 
-			h.deleteBlockInfo(b.ID())
 			height--
+			h.deleteBlockInfo(b.ID())
 		}
 
 		for i, b := range cc.AppliedBlocks {
@@ -85,9 +86,9 @@ func (rs *RosettaService) ProcessConsensusChange(cc modules.ConsensusChange) {
 				}
 			}
 
+			height++
 			info := parseBlock(b, height, cc.AppliedDiffs[i])
 			h.putBlockInfo(b.ID(), info)
-			height++
 		}
 		h.putCurrentHeight(height)
 		h.putCurrentBlockID(cc.AppliedBlocks[len(cc.AppliedBlocks)-1].ID())
@@ -134,7 +135,7 @@ func New(ni *rtypes.NetworkIdentifier, g modules.Gateway, cs modules.ConsensusSe
 			log.Println("initializing db")
 			h.putVersion("0.1.0")
 			h.putConsensusChangeID(modules.ConsensusChangeBeginning)
-			h.putCurrentHeight(0)
+			h.putCurrentHeight(^types.BlockHeight(0))
 			h.putCurrentBlockID(stypes.GenesisID)
 			h.putVoidBalance(stypes.ZeroCurrency)
 		}
