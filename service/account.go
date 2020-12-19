@@ -55,7 +55,7 @@ func (rs *RosettaService) AccountBalance(ctx context.Context, request *rtypes.Ac
 		return nil, errInvalidAddress(err)
 	}
 
-	balance, coins, bi, err := rs.balance(uh)
+	balance, _, bi, err := rs.balance(uh)
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +63,23 @@ func (rs *RosettaService) AccountBalance(ctx context.Context, request *rtypes.Ac
 	return &rtypes.AccountBalanceResponse{
 		BlockIdentifier: bi,
 		Balances:        []*rtypes.Amount{balance},
+	}, nil
+}
+
+// AccountCoins implements the /account/coins endpoint.
+func (rs *RosettaService) AccountCoins(ctx context.Context, request *rtypes.AccountCoinsRequest) (*rtypes.AccountCoinsResponse, *rtypes.Error) {
+	var uh stypes.UnlockHash
+	if err := uh.LoadString(request.AccountIdentifier.Address); err != nil {
+		return nil, errInvalidAddress(err)
+	}
+
+	_, coins, bi, err := rs.balance(uh)
+	if err != nil {
+		return nil, err
+	}
+
+	return &rtypes.AccountCoinsResponse{
+		BlockIdentifier: bi,
 		Coins:           coins,
 	}, nil
 }

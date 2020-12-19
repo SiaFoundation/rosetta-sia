@@ -59,7 +59,7 @@ func transferOp(index int, sco stypes.SiacoinOutput, id stypes.SiacoinOutputID, 
 			Index: int64(index),
 		},
 		Type:   typ,
-		Status: "Applied",
+		Status: rtypes.String("Applied"),
 		Account: &rtypes.AccountIdentifier{
 			Address: sco.UnlockHash.String(),
 		},

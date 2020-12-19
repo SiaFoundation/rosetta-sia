@@ -37,7 +37,7 @@ func main() {
 	}
 	supportedOps := []string{"Transfer"}
 	historicalBalanceLookup := false
-	a, err := asserter.NewServer(supportedOps, historicalBalanceLookup, []*rtypes.NetworkIdentifier{n})
+	a, err := asserter.NewServer(supportedOps, historicalBalanceLookup, []*rtypes.NetworkIdentifier{n}, nil, false)
 	if err != nil {
 		log.Fatal(err)
 	}
